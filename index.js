@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 const fs = require("fs/promises");
 const path = require("path");
-const { execFile } = require("child_process");
+const { execFile, spawnSync } = require("child_process");
 
 const SUPPORTED = new Set([
   ".png",
@@ -63,13 +63,39 @@ async function collectFiles(root, skip) {
   return files;
 }
 
-function convertWithSips(source, target) {
-  return new Promise((resolve, reject) => {
-    execFile("sips", ["-s", "format", "webp", source, "--out", target], (err) => {
-      if (err) reject(err);
-      else resolve();
+function which(cmd) {
+  const res = spawnSync("which", [cmd], { encoding: "utf8" });
+  return res.status === 0 && res.stdout.trim().length > 0;
+}
+
+function pickEncoder() {
+  if (which("cwebp")) return "cwebp";
+  if (which("ffmpeg")) return "ffmpeg";
+  return null;
+}
+
+function convertToWebp(source, target, encoder) {
+  if (encoder === "cwebp") {
+    return new Promise((resolve, reject) => {
+      execFile("cwebp", ["-quiet", "-q", "90", source, "-o", target], (err) => {
+        if (err) reject(err);
+        else resolve();
+      });
     });
-  });
+  }
+  if (encoder === "ffmpeg") {
+    return new Promise((resolve, reject) => {
+      execFile(
+        "ffmpeg",
+        ["-y", "-i", source, "-c:v", "libwebp", "-qscale", "80", target],
+        (err, _stdout, stderr) => {
+          if (err) reject(new Error(stderr || err.message));
+          else resolve();
+        }
+      );
+    });
+  }
+  return Promise.reject(new Error("Aucun encodeur disponible."));
 }
 
 async function ensureDir(p) {
@@ -80,6 +106,11 @@ async function run() {
   const parsed = parseArgs();
   if (!parsed) {
     console.error("Usage: node index.js <dossier> [-o dossier_sortie]");
+    process.exit(1);
+  }
+  const encoder = pickEncoder();
+  if (!encoder) {
+    console.error("Aucun encodeur WebP trouve (installe cwebp ou ffmpeg).");
     process.exit(1);
   }
   const inputDir = parsed.input;
@@ -106,7 +137,7 @@ async function run() {
     const dest = path.join(outputDir, rel).replace(path.extname(rel), ".webp");
     try {
       await ensureDir(path.dirname(dest));
-      await convertWithSips(src, dest);
+      await convertToWebp(src, dest, encoder);
       ok.push(dest);
     } catch (err) {
       ko.push([src, err.message || String(err)]);
