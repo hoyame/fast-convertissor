@@ -65,7 +65,7 @@ async function collectFiles(root, skip) {
 
 function convertWithSips(source, target) {
   return new Promise((resolve, reject) => {
-    execFile("sips", ["-s", "format", "jpeg", source, "--out", target], (err) => {
+    execFile("sips", ["-s", "format", "webp", source, "--out", target], (err) => {
       if (err) reject(err);
       else resolve();
     });
@@ -79,13 +79,13 @@ async function ensureDir(p) {
 async function run() {
   const parsed = parseArgs();
   if (!parsed) {
-    console.error("Usage: node convertisseur_jpeg.js <dossier> [-o dossier_sortie]");
+    console.error("Usage: node index.js <dossier> [-o dossier_sortie]");
     process.exit(1);
   }
   const inputDir = parsed.input;
   const outputDir = parsed.output
     ? path.resolve(parsed.output)
-    : path.join(inputDir, "jpeg_converties");
+    : path.join(inputDir, "webp_converties");
   let stat;
   try {
     stat = await fs.stat(inputDir);
@@ -103,7 +103,7 @@ async function run() {
   const ko = [];
   for (const src of todo) {
     const rel = path.relative(inputDir, src);
-    const dest = path.join(outputDir, rel).replace(path.extname(rel), ".jpg");
+    const dest = path.join(outputDir, rel).replace(path.extname(rel), ".webp");
     try {
       await ensureDir(path.dirname(dest));
       await convertWithSips(src, dest);
